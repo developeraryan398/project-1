@@ -1,0 +1,8 @@
+{
+  "name": "CampusFix",
+  "description": "Smart Campus Maintenance & Complaint Management System connecting students, staff, and campus administration. Report It. Track It. Fix It.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

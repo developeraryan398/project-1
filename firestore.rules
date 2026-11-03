@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getUserDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserDoc(request.auth.uid).role == 'admin') ||
+        (request.auth.token.email == 'aryan2008dbg@gmail.com' && isVerifiedEmail()) ||
+        request.auth.token.email == 'admin@campusfix.edu'
+      );
+    }
+
+    function isStaff() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getUserDoc(request.auth.uid).role == 'staff';
+    }
+
+    // --- HEALTH CHECK / CONNECTIVITY ---
+    // Verified endpoint for getDocFromServer connectivity probes
+    // Accessible only to authenticated campus sessions (Admin, Staff, Student) to preserve zero-trust
+    match /test/{testId} {
+      allow read: if isSignedIn() && isValidId(testId);
+      allow write: if isAdmin() && isValidId(testId);
+    }
+
+    // --- USERS Collection (Strict PII & Role Protection) ---
+    match /users/{userId} {
+      // PII Protection: Only the student themselves or an administrator can read the profile document
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      
+      // Prevent role spoofing on registration: force role: 'student' unless verified admin
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        incoming().keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
+        incoming().uid == userId &&
+        (incoming().role == 'student' || isAdmin());
+
+      // Prevent privilege escalation: users cannot modify role, uid, createdAt, or email
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == userId &&
+         !incoming().diff(existing()).affectedKeys().hasAny(['role', 'uid', 'createdAt', 'email']))
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // --- DEPARTMENTS Collection ---
+    match /departments/{departmentId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidId(departmentId);
+    }
+
+    // --- COMPLAINTS Collection ---
+    match /complaints/{complaintId} {
+      // Students read only their own complaints, staff read tickets for their department, admin reads all
+      allow get: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.studentId == request.auth.uid ||
+        (isStaff() && (
+          resource.data.departmentId == getUserDoc(request.auth.uid).departmentId ||
+          resource.data.assignedStaffId == request.auth.uid
+        ))
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.studentId == request.auth.uid ||
+        (isStaff() && resource.data.departmentId == getUserDoc(request.auth.uid).departmentId)
+      );
+
+      // Create complaint by student (bounded size, valid identity, status must be 'Submitted')
+      allow create: if isSignedIn() &&
+        isValidId(complaintId) &&
+        incoming().keys().hasAll(['complaintId', 'title', 'description', 'category', 'location', 'priority', 'status', 'studentId', 'departmentId', 'dueAt', 'createdAt', 'updatedAt']) &&
+        incoming().studentId == request.auth.uid &&
+        incoming().status == 'Submitted' &&
+        incoming().title is string && incoming().title.size() <= 200 &&
+        incoming().description is string && incoming().description.size() <= 2000 &&
+        incoming().priority in ['Low', 'Medium', 'High', 'Urgent'];
+
+      // Update: Tiered Identity Actions with strict state bounds
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        // Staff action: accept, start work, resolve within assigned department
+        (isStaff() &&
+         (resource.data.departmentId == getUserDoc(request.auth.uid).departmentId || resource.data.assignedStaffId == request.auth.uid) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assignedStaffId', 'assignedStaffName', 'resolutionNote', 'resolutionImageUrls', 'resolvedAt', 'updatedAt']) &&
+         incoming().status in ['Accepted', 'In Progress', 'Resolved'] &&
+         incoming().studentId == existing().studentId &&
+         incoming().complaintId == existing().complaintId) ||
+        // Student action: verify or reopen their own complaint
+        (resource.data.studentId == request.auth.uid &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reopenReason', 'verifiedAt', 'updatedAt']) &&
+         incoming().status in ['Verified', 'Reopened'] &&
+         incoming().complaintId == existing().complaintId)
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // --- ACTIVITY LOGS Collection (Append-Only Audit Trail) ---
+    match /activityLogs/{logId} {
+      // Activity logs are restricted to authorized management or contextual access
+      allow read: if isSignedIn() && (isAdmin() || isStaff() || resource.data.updatedByUid == request.auth.uid);
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        incoming().keys().hasAll(['logId', 'complaintId', 'action', 'updatedBy', 'updatedByRole', 'timestamp']) &&
+        (isAdmin() || incoming().updatedByRole in ['staff', 'student']);
+      allow update, delete: if false; // Strict immutability
+    }
+
+    // --- NOTIFICATIONS Collection ---
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(notificationId) && (
+        isAdmin() ||
+        incoming().userId == request.auth.uid ||
+        isStaff()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- FEEDBACK Collection ---
+    match /feedback/{feedbackId} {
+      // PII & Feedback privacy: Only the student who wrote it or admins can read feedback
+      allow read: if isSignedIn() && (resource.data.studentId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(feedbackId) &&
+        incoming().studentId == request.auth.uid &&
+        incoming().rating >= 1 && incoming().rating <= 5;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

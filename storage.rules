@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 1. Default-Deny Safety Net
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif|jpg)');
+    }
+
+    function isValidSize(maxMegaBytes) {
+      return request.resource.size <= maxMegaBytes * 1024 * 1024;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@campusfix.edu' ||
+        request.auth.token.email == 'aryan2008dbg@gmail.com'
+      );
+    }
+
+    // --- Student Complaint Images ---
+    // Students upload photographic evidence for new complaints (max 5MB, images only)
+    match /complaints/{complaintId}/{filename} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        isImage() &&
+        isValidSize(5);
+    }
+
+    // --- Staff Resolution Proofs ---
+    // Technicians upload completion photographs (max 5MB, images only)
+    match /resolutions/{complaintId}/{filename} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        isImage() &&
+        isValidSize(5);
+    }
+
+    // --- User Avatars ---
+    // Profile avatars isolated to owner (max 2MB, images only)
+    match /avatars/{userId}/{filename} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        request.auth.uid == userId &&
+        isImage() &&
+        isValidSize(2);
+    }
+  }
+}

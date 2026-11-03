@@ -1,0 +1,167 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered campus user profile (student, staff, admin)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["student", "staff", "admin"] },
+        "departmentId": { "type": "string", "maxLength": 64 },
+        "departmentName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "rollNumber": { "type": "string", "maxLength": 40 },
+        "hostelInfo": { "type": "string", "maxLength": 150 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "createdAt"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Campus maintenance department responsible for categories of complaints",
+      "type": "object",
+      "properties": {
+        "departmentId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 100 },
+        "code": { "type": "string", "maxLength": 20 },
+        "categories": { "type": "array" },
+        "staffIds": { "type": "array" },
+        "headName": { "type": "string", "maxLength": 100 },
+        "headEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "slaHoursHigh": { "type": "number" },
+        "slaHoursMedium": { "type": "number" },
+        "slaHoursLow": { "type": "number" }
+      },
+      "required": ["departmentId", "name", "code", "categories", "staffIds"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Campus problem ticket reported by student, routed to department, and resolved by staff",
+      "type": "object",
+      "properties": {
+        "complaintId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "category": { "type": "string", "maxLength": 64 },
+        "location": { "type": "object" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
+        "status": {
+          "type": "string",
+          "enum": ["Submitted", "Assigned", "Accepted", "In Progress", "Resolved", "Verified", "Reopened", "Rejected"]
+        },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 100 },
+        "studentEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "studentPhone": { "type": "string", "maxLength": 30 },
+        "departmentId": { "type": "string", "maxLength": 64 },
+        "departmentName": { "type": "string", "maxLength": 100 },
+        "assignedStaffId": { "type": "string", "maxLength": 128 },
+        "assignedStaffName": { "type": "string", "maxLength": 100 },
+        "imageUrls": { "type": "array" },
+        "resolutionNote": { "type": "string", "maxLength": 2000 },
+        "resolutionImageUrls": { "type": "array" },
+        "reopenReason": { "type": "string", "maxLength": 1000 },
+        "dueAt": { "type": "string", "format": "date-time" },
+        "isOverdue": { "type": "boolean" },
+        "escalatedToManagement": { "type": "boolean" },
+        "escalatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "verifiedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["complaintId", "title", "description", "category", "location", "priority", "status", "studentId", "departmentId", "dueAt", "createdAt", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit trail log tracking lifecycle transitions and actions on a complaint",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "maxLength": 64 },
+        "complaintId": { "type": "string", "maxLength": 64 },
+        "action": { "type": "string", "maxLength": 100 },
+        "oldStatus": { "type": "string", "maxLength": 32 },
+        "newStatus": { "type": "string", "maxLength": 32 },
+        "updatedBy": { "type": "string", "maxLength": 100 },
+        "updatedByRole": { "type": "string", "enum": ["student", "staff", "admin"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "note": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["logId", "complaintId", "action", "updatedBy", "updatedByRole", "timestamp"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "In-app notifications for students, staff, and management",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "maxLength": 64 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "complaintId": { "type": "string", "maxLength": 64 },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["notificationId", "userId", "title", "message", "complaintId", "read", "timestamp"]
+    },
+    "ComplaintFeedback": {
+      "title": "ComplaintFeedback",
+      "description": "Student rating and satisfaction review for a resolved complaint",
+      "type": "object",
+      "properties": {
+        "feedbackId": { "type": "string", "maxLength": 64 },
+        "complaintId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "aspects": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["feedbackId", "complaintId", "studentId", "rating", "comment", "createdAt"]
+    },
+    "HealthCheck": {
+      "title": "HealthCheck",
+      "description": "Connectivity test document used by client getDocFromServer health probes",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "maxLength": 50 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/test/{testId}": {
+      "schema": { "$ref": "HealthCheck" },
+      "description": "Lightweight connectivity health check endpoint for getDocFromServer"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Stores user profiles with role-based access attributes"
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "Department" },
+      "description": "Stores maintenance departments, handled categories, and SLA configuration"
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "Complaint" },
+      "description": "Stores all campus maintenance tickets with routing, status, and proof"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "ActivityLog" },
+      "description": "Immutable audit trail of status updates and user actions"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "NotificationItem" },
+      "description": "User notification messages for updates, assignments, and escalations"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "ComplaintFeedback" },
+      "description": "Student ratings and reviews for completed maintenance tickets"
+    }
+  }
+}
