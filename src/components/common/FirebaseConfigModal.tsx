@@ -202,16 +202,30 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({ isOpen
                   rows={4}
                   value={customConfigJson}
                   onChange={(e) => setCustomConfigJson(e.target.value)}
-                  placeholder='{"apiKey": "AIzaSy...", "projectId": "campusfix-prod", "authDomain": "campusfix-prod.firebaseapp.com"}'
+                  placeholder='{"apiKey": "AIzaSy...", "projectId": "campusfix-7943b", "authDomain": "campusfix-7943b.firebaseapp.com"}'
                   className="w-full text-xs font-mono p-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
-                <button
-                  type="button"
-                  onClick={handleSaveCustomConfig}
-                  className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
-                >
-                  {saveSuccess ? 'Saved! Reloading...' : 'Save & Connect'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomConfig}
+                    className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                  >
+                    {saveSuccess ? 'Saved! Reloading...' : 'Save & Connect'}
+                  </button>
+                  {localStorage.getItem('campusfix_custom_firebase_config') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('campusfix_custom_firebase_config');
+                        window.location.reload();
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      Reset to Default
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

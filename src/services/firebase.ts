@@ -11,40 +11,111 @@ export interface FirebaseClientConfig {
   storageBucket?: string;
   messagingSenderId?: string;
   appId?: string;
+  measurementId?: string;
   firestoreDatabaseId?: string;
 }
 
-// Check for environment variables or saved config
+// Production Firebase Configuration for campusfix-7943b
+export const DEFAULT_PRODUCTION_CONFIG: FirebaseClientConfig = {
+  apiKey: "AIzaSyBrMeh7sfh7OVjEGWZofGVPYJq9w8GDUIs",
+  authDomain: "campusfix-7943b.firebaseapp.com",
+  projectId: "campusfix-7943b",
+  storageBucket: "campusfix-7943b.firebasestorage.app",
+  messagingSenderId: "629402488014",
+  appId: "1:629402488014:web:b24851dd276e7274b0549f",
+  measurementId: "G-3X73QGPS6B",
+  firestoreDatabaseId: "(default)",
+};
+
+function sanitizeValue(val: any): string | undefined {
+  if (typeof val !== 'string') return undefined;
+  const cleaned = val.trim().replace(/^['",]+|['",]+$/g, '').trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function sanitizeDatabaseId(rawId: any): string {
+  if (typeof rawId !== 'string') return '(default)';
+  const cleaned = sanitizeValue(rawId);
+  // Normalize empty values, 'default', or misconfigured Analytics measurement IDs (G-*)
+  if (!cleaned || cleaned.startsWith('G-') || cleaned === 'default' || cleaned === '(default)') {
+    return '(default)';
+  }
+  return cleaned;
+}
+
+// Check for environment variables, saved custom config, or default production configuration
 export function getStoredFirebaseConfig(): FirebaseClientConfig | null {
   const storage = getStorageBackend();
 
-  // Check custom saved config in storage
+  // 1. Check custom saved config in storage
   const saved = storage.getItem('campusfix_custom_firebase_config');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (parsed.projectId && parsed.apiKey) return parsed;
+      const projectId = sanitizeValue(parsed.projectId);
+      const apiKey = sanitizeValue(parsed.apiKey);
+      if (projectId && apiKey) {
+        return {
+          apiKey,
+          authDomain: sanitizeValue(parsed.authDomain),
+          projectId,
+          storageBucket: sanitizeValue(parsed.storageBucket),
+          messagingSenderId: sanitizeValue(parsed.messagingSenderId),
+          appId: sanitizeValue(parsed.appId),
+          measurementId: sanitizeValue(parsed.measurementId),
+          firestoreDatabaseId: sanitizeDatabaseId(parsed.firestoreDatabaseId),
+        };
+      }
     } catch {
       // ignore
     }
   }
 
-  // Check Vite env variables
-  const envConfig: FirebaseClientConfig = {
-    apiKey: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_API_KEY : undefined,
-    authDomain: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN : undefined,
-    projectId: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_PROJECT_ID : undefined,
-    storageBucket: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_STORAGE_BUCKET : undefined,
-    messagingSenderId: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID : undefined,
-    appId: typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_APP_ID : undefined,
-    firestoreDatabaseId: (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_DATABASE_ID : undefined) || '(default)',
-  };
+  // 2. Check Vite & Node runtime environment variables safely
+  const nodeEnv = typeof globalThis !== 'undefined' && (globalThis as any).process ? (globalThis as any).process.env : undefined;
+  const envApiKey = sanitizeValue(
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_API_KEY : undefined) ||
+    nodeEnv?.VITE_FIREBASE_API_KEY
+  );
+  const envProjectId = sanitizeValue(
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_PROJECT_ID : undefined) ||
+    nodeEnv?.VITE_FIREBASE_PROJECT_ID
+  );
 
-  if (envConfig.projectId && envConfig.apiKey) {
-    return envConfig;
+  if (envApiKey && envProjectId) {
+    const rawDatabaseId =
+      (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_DATABASE_ID : undefined) ||
+      nodeEnv?.VITE_FIREBASE_DATABASE_ID;
+
+    return {
+      apiKey: envApiKey,
+      authDomain: sanitizeValue(
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN : undefined) ||
+        nodeEnv?.VITE_FIREBASE_AUTH_DOMAIN
+      ),
+      projectId: envProjectId,
+      storageBucket: sanitizeValue(
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_STORAGE_BUCKET : undefined) ||
+        nodeEnv?.VITE_FIREBASE_STORAGE_BUCKET
+      ),
+      messagingSenderId: sanitizeValue(
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID : undefined) ||
+        nodeEnv?.VITE_FIREBASE_MESSAGING_SENDER_ID
+      ),
+      appId: sanitizeValue(
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_APP_ID : undefined) ||
+        nodeEnv?.VITE_FIREBASE_APP_ID
+      ),
+      measurementId: sanitizeValue(
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_FIREBASE_MEASUREMENT_ID : undefined) ||
+        nodeEnv?.VITE_FIREBASE_MEASUREMENT_ID
+      ),
+      firestoreDatabaseId: sanitizeDatabaseId(rawDatabaseId),
+    };
   }
 
-  return null;
+  // 3. Built-in default production configuration for campusfix-7943b
+  return DEFAULT_PRODUCTION_CONFIG;
 }
 
 export function isFirebaseConfigured(): boolean {
@@ -64,7 +135,7 @@ try {
     firebaseAuthInstance = getAuth(firebaseAppInstance);
   }
 } catch (err) {
-  console.warn('Firebase initialization in dev mode (fallback reactive store active):', err);
+  console.warn('Firebase initialization note:', err);
 }
 
 export const db = firestoreDbInstance;
@@ -210,10 +281,19 @@ export async function testConnection(): Promise<ConnectionTestResult> {
     };
   }
 
-  // 4. Server Round-Trip with getDocFromServer
+  // 4. Server Round-Trip with getDocFromServer (with 5000ms timeout protection)
   try {
     const testDocRef = doc(db, 'test', 'connection');
-    await getDocFromServer(testDocRef);
+    const docPromise = getDocFromServer(testDocRef);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        const timeoutErr: any = new Error('Firestore getDocFromServer request timed out after 5000ms. Please verify network access.');
+        timeoutErr.code = 'unavailable';
+        reject(timeoutErr);
+      }, 5000);
+    });
+
+    await Promise.race([docPromise, timeoutPromise]);
 
     return {
       success: true,

@@ -292,14 +292,33 @@ export function runEscalationCheck(): number {
   return updatedCount;
 }
 
+// Helper to recursively strip undefined properties for Firestore
+function cleanForFirestore<T extends Record<string, any>>(data: T): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (val !== undefined) {
+      if (val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        cleaned[key] = cleanForFirestore(val);
+      } else {
+        cleaned[key] = val;
+      }
+    }
+  }
+  return cleaned;
+}
+
 // Internal activity log helper
 function addActivityLogInternal(log: ActivityLog): void {
+  const safeLog: ActivityLog = {
+    ...log,
+    updatedByUid: log.updatedByUid || (log.updatedByRole === 'admin' ? 'admin-1' : 'system'),
+  };
   const logs = getFromStorage<ActivityLog[]>(STORAGE_KEYS.ACTIVITY_LOGS, []);
-  logs.unshift(log);
+  logs.unshift(safeLog);
   setToStorage(STORAGE_KEYS.ACTIVITY_LOGS, logs);
 
   if (isFirebaseConfigured() && db) {
-    setDoc(doc(db, 'activityLogs', log.logId), log).catch((err) => {
+    setDoc(doc(db, 'activityLogs', safeLog.logId), cleanForFirestore(safeLog)).catch((err) => {
       console.warn('Firestore activityLogs sync note (handled):', err);
     });
   }
@@ -314,7 +333,7 @@ function addNotificationInternal(item: NotificationItem): void {
   setToStorage(STORAGE_KEYS.NOTIFICATIONS, notifs);
 
   if (isFirebaseConfigured() && db) {
-    setDoc(doc(db, 'notifications', item.notificationId), item).catch((err) => {
+    setDoc(doc(db, 'notifications', item.notificationId), cleanForFirestore(item)).catch((err) => {
       console.warn('Firestore notifications sync note (handled):', err);
     });
   }
@@ -398,7 +417,7 @@ export const CampusDB = {
 
     // If Cloud Firebase Firestore is configured, asynchronously persist document
     if (isFirebaseConfigured() && db) {
-      setDoc(doc(db, 'complaints', complaintId), newComplaint).catch((err) => {
+      setDoc(doc(db, 'complaints', complaintId), cleanForFirestore(newComplaint)).catch((err) => {
         console.warn('Firestore complaints sync note (handled):', err);
       });
     }
@@ -559,7 +578,7 @@ export const CampusDB = {
     }
 
     if (isFirebaseConfigured() && db) {
-      setDoc(doc(db, 'complaints', id), updated, { merge: true }).catch((err) => {
+      setDoc(doc(db, 'complaints', id), cleanForFirestore(updated), { merge: true }).catch((err) => {
         console.warn('Firestore complaints update sync note (handled):', err);
       });
     }
@@ -795,7 +814,7 @@ export const CampusDB = {
     }
 
     if (isFirebaseConfigured() && db) {
-      setDoc(doc(db, 'feedback', newFeedback.feedbackId), newFeedback).catch((err) => {
+      setDoc(doc(db, 'feedback', newFeedback.feedbackId), cleanForFirestore(newFeedback)).catch((err) => {
         console.warn('Firestore feedback sync note (handled):', err);
       });
     }
